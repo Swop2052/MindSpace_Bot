@@ -1,58 +1,55 @@
-from langchain_core.messages import (
-    SystemMessage,
-    HumanMessage
-)
+"""
+Safe response generation for crisis situations.
+"""
 
 from llm import llm
+from langchain_core.messages import SystemMessage, HumanMessage
+from prompts import SYSTEM_PROMPT
 
-SUPPORT_MESSAGE = """
+# Direct helpline numbers - always show these in crisis
+CRISIS_HELPLINE_MESSAGE = """
 
 ----------------------------
+📞 **IMMEDIATE SUPPORT - त्वरित मदत**
+----------------------------
+🇮🇳 **National Helpline:** 8448440632
+🌐 **Website:** https://manodarpan.education.gov.in/
+📧 **Email:** manodarpan-mhrd@gov.in
 
-Helpline: 8448440632
+----------------------------
+🇮🇳 **Other Helplines:**
+📱 **iCall:** 9152987821 (Mon-Sat 10am-8pm)
+📱 **Vandrevala Foundation:** 1860-2662-345 (24/7)
+📱 **Snehi:** 91-22-2772-6771
+📱 **Jeevan Aastha:** 1800-233-3330
+----------------------------
 
-Email:
-manodarpan-mhrd@gov.in
-
-Website:
-https://manodarpan.education.gov.in/
-
+💙 **You are not alone. Please reach out for help.**
+💙 **तुम्ही एकटे नाही. कृपया मदतीसाठी संपर्क करा.**
 """
 
 
-FALLBACK_SAFE_REPLY = (
-    "I'm really glad you shared this. "
-    "You matter, and you don't have to handle this alone. "
-    "If you might hurt yourself or feel in immediate danger, "
-    "please call your local emergency services right now and contact "
-    "someone you trust to stay with you. "
-    "If you want, we can take one small step together right now: "
-    "drink some water, take 10 slow breaths, and tell me where you are."
-)
-
-
-def generate_safe_response(user_message, risk_analysis=None):
-    risk_level = "HIGH"
-
-    if risk_analysis:
-        risk_level = risk_analysis.get(
-            "risk_level",
-            "HIGH"
-        )
-
+def generate_crisis_escalation(user_message: str) -> str:
+    """
+    Generate a calm, supportive response for crisis situations.
+    ALWAYS shows helpline numbers directly.
+    """
     prompt = f"""
-You are responding to a mental-health crisis conversation.
+The user has shared something that indicates they may be in crisis or having harmful thoughts.
 
-Risk level: {risk_level}
+RESPOND LIKE A CALM, CARING FRIEND:
 
-Rules you must follow:
-- Be calm, caring, and concise.
-- Validate emotion first.
-- Do not provide any harmful methods or details.
-- Ask one direct safety check question.
-- Suggest immediate support from trusted person and local emergency services if danger is immediate.
-- Offer one grounding step (for example breathing, water, sitting with someone).
-- Keep it human and non-robotic.
+1. Acknowledge their message seriously - show you understand the weight of what they're sharing
+2. Express genuine care and concern for their wellbeing
+3. Let them know they are not alone and you are here with them
+4. Gently encourage them to reach out to professional support
+5. Be calm, grounded, and supportive - not panicked
+
+CRITICAL RULES:
+- NEVER say "everything will be okay" - it dismisses their pain
+- NEVER minimize what they're feeling
+- ALWAYS include helpline information
+- Sound genuine and human, not robotic
 
 User message:
 {user_message}
@@ -60,23 +57,31 @@ User message:
 
     try:
         response = llm.invoke([
-            SystemMessage(
-                content="You are a safe mental-health support assistant."
-            ),
-            HumanMessage(
-                content=prompt
-            )
+            SystemMessage(content=SYSTEM_PROMPT),
+            HumanMessage(content=prompt)
         ])
+        
+        final_response = response.content.strip()
+        
+        # Add appropriate warm closing if not already present
+        if not final_response.endswith(("💙", "❤️", "💛")):
+            final_response += "\n\n💙 I care about you."
+        
+        # ALWAYS add helpline numbers
+        final_response += CRISIS_HELPLINE_MESSAGE
+        
+        return final_response
+        
+    except Exception as e:
+        print(f"Error generating crisis response: {e}")
+        # Fallback - always show helpline
+        return f"""I hear you. What you're sharing is serious, and I'm really glad you reached out.
 
-        reply = response.content.strip()
+Please know that you are not alone. 💙
 
-        if not reply:
-            reply = FALLBACK_SAFE_REPLY
+{CRISIS_HELPLINE_MESSAGE}"""
 
-    except Exception:
-        reply = FALLBACK_SAFE_REPLY
 
-    return (
-        reply
-        + SUPPORT_MESSAGE
-    )
+def get_support_message() -> str:
+    """Get the support message with contact details."""
+    return CRISIS_HELPLINE_MESSAGE

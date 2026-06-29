@@ -1,5 +1,5 @@
-from dotenv import load_dotenv
 import os
+from dotenv import load_dotenv
 
 load_dotenv()
 
@@ -12,7 +12,7 @@ ANTHROPIC_MODEL = "claude-sonnet-4-6"
 # Application settings
 MAX_HISTORY_LENGTH = 50
 MAX_CONTEXT_MESSAGES = 20
-MEMORY_FILE_PATH = "conversation_memory.json"
+MEMORY_FILE_PATH = os.getenv("MEMORY_FILE_PATH", "conversation_memory.json")
 
 # Safety Settings
 CRISIS_DETECTION_ENABLED = os.getenv("CRISIS_DETECTION_ENABLED", "True").lower() == "true"

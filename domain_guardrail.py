@@ -244,26 +244,6 @@ def extract_name(text: str) -> Optional[str]:
     if not text:
         return None
     
-    # Common words that might follow name indicators but are not names
-    excluded_words = {
-        "a", "an", "the", "and", "or", "but", "if", "then", "of", "to", "in", "on", "at", "for", "with",
-        "i", "you", "he", "she", "it", "we", "they", "me", "him", "her", "us", "them", "my", "your",
-        "his", "its", "our", "their", "mine", "yours", "hers", "ours", "theirs", "this", "that", "these", "those",
-        "am", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had", "do", "does", "did",
-        "can", "could", "will", "would", "shall", "should", "may", "might", "must", "go", "going", "come", "coming",
-        "feel", "feeling", "think", "thinking", "say", "saying", "tell", "telling", "know", "knowing",
-        "sad", "happy", "stressed", "depressed", "anxious", "worried", "hurt", "crying", "scared", "fine",
-        "good", "okay", "ok", "bad", "lonely", "tired", "exhausted", "angry", "furious", "afraid", "hopeless",
-        "helpless", "suicidal", "sick", "ill", "pain", "struggling", "dying", "trying", "staying", "living",
-        "working", "studying", "learning", "so", "very", "not", "too", "really", "just", "actually", "honestly",
-        "here", "there", "home", "okayish", "better", "worse", "crap", "terrible", "awful", "horrible",
-        "great", "awesome", "wonderful", "fantastic", "amazing", "bored", "excited", "nervous", "neutral",
-        "human", "bot", "chatbot", "user", "assistant", "person", "man", "woman", "boy", "girl", "friend",
-        "student", "teacher", "doctor", "patient", "client", "guest", "member", "counselor", "therapist",
-        "theek", "thik", "achha", "acha", "bura", "pareshan", "tension", "stress", "udhas", "udaas", "khush",
-        "mahit", "maheet", "bhiti", "radat", "dukh", "dukhi", "traas", "chinta", "veva", "kon"
-    }
-    
     name_patterns = [
         r"\bmy\s+name\s+is\s+([A-Za-z]+)\b",
         r"\bi\s+am\s+([A-Za-z]+)\b",
@@ -279,9 +259,8 @@ def extract_name(text: str) -> Optional[str]:
         if match:
             name = match.group(1).strip()
             name = re.sub(r'[^A-Za-z\u0900-\u097F\s]', '', name)
-            if name and len(name) >= 2 and len(name) < 50:
-                if name.lower() not in excluded_words:
-                    return name.title()
+            if name and len(name) > 0 and len(name) < 50:
+                return name.title()
     
     return None
 

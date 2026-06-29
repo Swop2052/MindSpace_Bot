@@ -1,3 +1,4 @@
+<<<<<<< Updated upstream
 fastapi==0.115.0
 uvicorn==0.30.6
 
@@ -28,3 +29,16 @@ tiktoken==0.8.0
 
 numpy==1.26.4
 
+=======
+# FastAPI and Server
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+pydantic==2.9.2
+
+# Environment Configuration
+python-dotenv==1.0.1
+
+# LLM Libraries (LangChain & Anthropic Claude)
+langchain-core==0.3.10
+langchain-anthropic==0.2.3
+>>>>>>> Stashed changes

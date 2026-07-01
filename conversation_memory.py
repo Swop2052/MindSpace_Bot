@@ -9,7 +9,21 @@ from datetime import datetime
 from typing import List, Dict, Optional, Any
 from collections import deque
 
-from config import MAX_HISTORY_LENGTH, MAX_CONTEXT_MESSAGES, MEMORY_FILE_PATH
+from config import MAX_HISTORY_LENGTH, MAX_CONTEXT_MESSAGES, MEMORY_FILE_PATH, USE_REDIS, REDIS_HOST, REDIS_PORT
+
+# Initialize redis client conditionally
+redis_client = None
+if USE_REDIS:
+    try:
+        import redis
+        redis_client = redis.Redis(
+            host=REDIS_HOST,
+            port=REDIS_PORT,
+            db=0,
+            decode_responses=True
+        )
+    except ImportError:
+        print("Warning: redis package not installed, falling back to local file storage.")
 
 
 class ConversationMemory:
@@ -145,7 +159,7 @@ class ConversationMemory:
         return f"{MEMORY_FILE_PATH}.{self.session_id}.json"
     
     def _save_memory(self) -> None:
-        """Save memory to file."""
+        """Save memory to Redis or fallback local file."""
         try:
             data = {
                 "session_id": self.session_id,
@@ -155,22 +169,38 @@ class ConversationMemory:
                 "stats": self.stats,
                 "last_saved": datetime.now().isoformat()
             }
-            with open(self._get_memory_path(), 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+            if USE_REDIS and redis_client:
+                # Save key with 24 hours expiry (86400 seconds)
+                redis_client.setex(
+                    f"mindspace:session:{self.session_id}",
+                    24 * 3600,
+                    json.dumps(data, ensure_ascii=False)
+                )
+            else:
+                with open(self._get_memory_path(), 'w', encoding='utf-8') as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
         except Exception as e:
             print(f"Error saving memory: {e}")
     
     def _load_memory(self) -> None:
-        """Load memory from file."""
+        """Load memory from Redis or fallback local file."""
         try:
-            path = self._get_memory_path()
-            if os.path.exists(path):
-                with open(path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                self.messages = data.get("messages", [])
-                self.user_info = data.get("user_info", self.user_info)
-                self.crisis_flags = data.get("crisis_flags", [])
-                loaded_stats = data.get("stats", {})
+            loaded_data = None
+            if USE_REDIS and redis_client:
+                data_str = redis_client.get(f"mindspace:session:{self.session_id}")
+                if data_str:
+                    loaded_data = json.loads(data_str)
+            else:
+                path = self._get_memory_path()
+                if os.path.exists(path):
+                    with open(path, 'r', encoding='utf-8') as f:
+                        loaded_data = json.load(f)
+            
+            if loaded_data:
+                self.messages = loaded_data.get("messages", [])
+                self.user_info = loaded_data.get("user_info", self.user_info)
+                self.crisis_flags = loaded_data.get("crisis_flags", [])
+                loaded_stats = loaded_data.get("stats", {})
                 for k, v in loaded_stats.items():
                     self.stats[k] = v
         except Exception as e:
@@ -217,10 +247,17 @@ def delete_memory(session_id: str) -> None:
         _memory_store[session_id].reset_all()
         del _memory_store[session_id]
         
-        # Also delete the file
+    # Delete from Redis if enabled
+    if USE_REDIS and redis_client:
         try:
-            path = f"{MEMORY_FILE_PATH}.{session_id}.json"
-            if os.path.exists(path):
-                os.remove(path)
+            redis_client.delete(f"mindspace:session:{session_id}")
         except Exception as e:
-            print(f"Error deleting memory file: {e}")
+            print(f"Error deleting memory from Redis: {e}")
+            
+    # Also delete the file
+    try:
+        path = f"{MEMORY_FILE_PATH}.{session_id}.json"
+        if os.path.exists(path):
+            os.remove(path)
+    except Exception as e:
+        print(f"Error deleting memory file: {e}")

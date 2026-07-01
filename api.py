@@ -4,6 +4,7 @@ Provides REST API endpoints for chatbot integration.
 """
 
 from fastapi import FastAPI, HTTPException, Depends, status, Request
+from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -47,6 +48,18 @@ class RateLimiter:
         return True
 
 rate_limiter = RateLimiter(requests_per_minute=60)
+
+# API Key Verification
+security = HTTPBearer()
+API_KEY = os.getenv("CONVERSATIONAL_BOT_API_KEY")
+
+async def verify_api_key(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    if API_KEY and credentials.credentials != API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing API key."
+        )
+    return credentials.credentials
 
 # ============================================================================
 # Pydantic Models for API
@@ -130,26 +143,6 @@ class HealthCheckResponse(BaseModel):
     services: Dict[str, str]
 
 # ============================================================================
-# FastAPI Application
-# ============================================================================
-
-app = FastAPI(
-    title="MindSpace Chatbot API",
-    version="1.0.0"
-)
-
-# CORS Middleware - Production ready
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS if ALLOWED_ORIGINS != ["*"] else ["*"],
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
-    max_age=86400,
-)
-
-# ============================================================================
 # Session Store
 # ============================================================================
 
@@ -157,6 +150,45 @@ _session_store: Dict[str, MindSpaceChatbot] = {}
 _user_session_map: Dict[str, str] = {}
 _session_timestamps: Dict[str, datetime] = {}
 SESSION_TIMEOUT_HOURS = 24
+
+# ============================================================================
+# FastAPI Application (with Lifespan)
+# ============================================================================
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("🚀 MindSpace Chatbot API starting...")
+    logger.info("📚 Documentation available at /docs")
+    logger.info("🔍 Health check available at /health")
+    logger.info(f"📊 Max sessions: {len(_session_store)}")
+    yield
+    logger.info("👋 MindSpace Chatbot API shutting down...")
+    for session_id, chatbot in _session_store.items():
+        try:
+            if hasattr(chatbot, 'memory') and chatbot.memory:
+                chatbot.memory._save_memory()
+                logger.info(f"💾 Saved session: {session_id}")
+        except Exception as e:
+            logger.error(f"❌ Error saving session {session_id}: {e}")
+
+app = FastAPI(
+    title="MindSpace Chatbot API",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# CORS Middleware - Production ready
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+is_wildcard = ALLOWED_ORIGINS == ["*"] or "*" in ALLOWED_ORIGINS
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False if is_wildcard else True,  # Credentials must be false for wildcard *
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
+    max_age=86400,
+)
 
 
 def cleanup_expired_sessions():
@@ -234,8 +266,8 @@ async def health_check():
     )
 
 
-@app.post("/api/session", response_model=SessionCreateResponse, status_code=status.HTTP_201_CREATED)
-async def create_session(request: SessionCreateRequest):
+@app.post("/api/session", response_model=SessionCreateResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(verify_api_key)])
+def create_session(request: SessionCreateRequest):
     try:
         session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
         
@@ -261,8 +293,8 @@ async def create_session(request: SessionCreateRequest):
         )
 
 
-@app.post("/api/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest, req: Request):
+@app.post("/api/chat", response_model=ChatResponse, dependencies=[Depends(verify_api_key)])
+def chat(request: ChatRequest, req: Request):
     try:
         # Rate limiting
         client_ip = req.client.host if req.client else "unknown"
@@ -325,8 +357,8 @@ async def chat(request: ChatRequest, req: Request):
         )
 
 
-@app.get("/api/session/{session_id}/stats", response_model=SessionStats)
-async def get_session_stats(session_id: str):
+@app.get("/api/session/{session_id}/stats", response_model=SessionStats, dependencies=[Depends(verify_api_key)])
+def get_session_stats(session_id: str):
     try:
         if session_id not in _session_store:
             raise HTTPException(
@@ -362,8 +394,8 @@ async def get_session_stats(session_id: str):
         )
 
 
-@app.delete("/api/session/{session_id}/clear")
-async def clear_session_memory(session_id: str):
+@app.delete("/api/session/{session_id}/clear", dependencies=[Depends(verify_api_key)])
+def clear_session_memory(session_id: str):
     try:
         if session_id not in _session_store:
             raise HTTPException(
@@ -391,8 +423,8 @@ async def clear_session_memory(session_id: str):
         )
 
 
-@app.delete("/api/session/{session_id}/reset")
-async def reset_session(session_id: str):
+@app.delete("/api/session/{session_id}/reset", dependencies=[Depends(verify_api_key)])
+def reset_session(session_id: str):
     try:
         if session_id not in _session_store:
             raise HTTPException(
@@ -420,8 +452,8 @@ async def reset_session(session_id: str):
         )
 
 
-@app.delete("/api/session/{session_id}")
-async def delete_session(session_id: str):
+@app.delete("/api/session/{session_id}", dependencies=[Depends(verify_api_key)])
+def delete_session(session_id: str):
     try:
         if session_id not in _session_store:
             raise HTTPException(
@@ -454,8 +486,8 @@ async def delete_session(session_id: str):
         )
 
 
-@app.get("/api/sessions")
-async def list_sessions():
+@app.get("/api/sessions", dependencies=[Depends(verify_api_key)])
+def list_sessions():
     try:
         sessions = []
         for session_id, chatbot in _session_store.items():
@@ -513,28 +545,8 @@ async def general_exception_handler(request, exc):
     )
 
 # ============================================================================
-# Startup and Shutdown Events
+# End of Event Definitions
 # ============================================================================
-
-@app.on_event("startup")
-async def startup_event():
-    logger.info("🚀 MindSpace Chatbot API starting...")
-    logger.info("📚 Documentation available at /docs")
-    logger.info("🔍 Health check available at /health")
-    logger.info(f"📊 Max sessions: {len(_session_store)}")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    logger.info("👋 MindSpace Chatbot API shutting down...")
-    
-    for session_id, chatbot in _session_store.items():
-        try:
-            if hasattr(chatbot, 'memory') and chatbot.memory:
-                chatbot.memory._save_memory()
-                logger.info(f"💾 Saved session: {session_id}")
-        except Exception as e:
-            logger.error(f"❌ Error saving session {session_id}: {e}")
 
 
 # ============================================================================
@@ -543,24 +555,25 @@ async def shutdown_event():
 
 if __name__ == "__main__":
     import uvicorn
+    from config import API_HOST, API_PORT, API_RELOAD, API_WORKERS
     
     print("=" * 60)
     print("🌟 MindSpace Chatbot API Server")
     print("=" * 60)
     print("🚀 Starting server...")
-    print("📚 API Documentation: http://localhost:8000/docs")
-    print("🔍 Health Check: http://localhost:8000/health")
-    print("📨 Chat Endpoint: POST http://localhost:8000/api/chat")
+    print(f"📚 API Documentation: http://localhost:{API_PORT}/docs")
+    print(f"🔍 Health Check: http://localhost:{API_PORT}/health")
+    print(f"📨 Chat Endpoint: POST http://localhost:{API_PORT}/api/chat")
     print("=" * 60)
     
-    host = os.getenv("API_HOST", "0.0.0.0")
-    port = int(os.getenv("API_PORT", 8000))
-    reload = os.getenv("API_RELOAD", "False").lower() == "true"
+    # Uvicorn only supports workers > 1 if reload is False
+    workers = 1 if API_RELOAD else API_WORKERS
     
     uvicorn.run(
         "api:app",
-        host=host,
-        port=port,
-        reload=reload,
+        host=API_HOST,
+        port=API_PORT,
+        reload=API_RELOAD,
+        workers=workers,
         log_level="info"
     )

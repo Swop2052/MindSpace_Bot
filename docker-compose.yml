@@ -8,24 +8,29 @@ services:
     container_name: mindspace-chatbot
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "8015:8015"
     env_file:
       - .env
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - API_HOST=0.0.0.0
-      - API_PORT=8000
+      - API_PORT=8015
       - API_RELOAD=False
       - LOG_LEVEL=INFO
       - PYTHONUNBUFFERED=1
       - PYTHONIOENCODING=utf-8
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - USE_REDIS=True
       - MEMORY_FILE_PATH=/app/data/conversation_memory.json
     volumes:
       - ./data:/app/data
     networks:
       - mindspace-network
+    depends_on:
+      - redis
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8015/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -36,6 +41,25 @@ services:
           memory: 512M
         reservations:
           memory: 256M
+
+  redis:
+    image: redis:alpine
+    container_name: mindspace-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - mindspace-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  redis-data:
 
 networks:
   mindspace-network:

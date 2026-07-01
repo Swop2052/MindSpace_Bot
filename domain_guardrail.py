@@ -429,13 +429,25 @@ def get_off_topic_reply(text: Optional[str] = None, target_language: str = None)
     return random.choice(OFF_TOPIC_REPLIES_EN)
 
 
-def get_prompt_injection_reply(text: Optional[str] = None) -> str:
+def get_prompt_injection_reply(target_language: str = 'en') -> str:
     """Get response for prompt injection attempts."""
+    if target_language == 'mr':
+        return "मी तुमच्या भावनिक आरोग्यासाठी इथे आहे. आज तुम्हाला कसं वाटतंय?"
+    elif target_language == 'hi':
+        return "मैं आपकी भावनात्मक भलाई के लिए यहाँ हूँ। आज आप कैसा महसूस कर रहे हैं?"
+    elif target_language == 'hinglish':
+        return "Main aapki emotional wellbeing ke liye yahan hoon. Aaj aap kaise feel kar rahe hain?"
     return "I'm here to support your emotional wellbeing. How are you feeling today?"
 
 
-def get_sensitive_info_redirect(text: Optional[str] = None) -> str:
+def get_sensitive_info_redirect(target_language: str = 'en') -> str:
     """Get response for sensitive information sharing."""
+    if target_language == 'mr':
+        return "मला वैयक्तिक तपशीलांची आवश्यकता नाही. आज तुम्हाला कसं वाटतंय यावर लक्ष केंद्रित करूया."
+    elif target_language == 'hi':
+        return "मुझे व्यक्तिगत विवरणों की आवश्यकता नहीं है। आइए इस पर ध्यान केंद्रित करें कि आप आज कैसा महसूस कर रहे हैं।"
+    elif target_language == 'hinglish':
+        return "Mujhe personal details ki zaroorat nahi hai. Let's focus on aap aaj kaisa feel kar rahe hain."
     return "I don't need personal details. Let's focus on how you're feeling today."
 
 
@@ -456,3 +468,26 @@ def analyze_safety_risk(text: str) -> Tuple[str, bool, bool]:
     
     is_mh = is_mental_health_query(text)
     return "LOW", False, is_mh
+
+
+def redact_sensitive_info(text: str) -> str:
+    """
+    Redact sensitive personal info (Aadhaar, PAN, Passports, CCs, UPI, Bank accts) from text.
+    Replaces long sequences of digits or patterns with [REDACTED].
+    """
+    if not text:
+        return ""
+    
+    # 1. Redact credit card patterns (e.g. 13 to 19 digits, with or without spaces/dashes)
+    text = re.sub(r"\b(?:\d[- \s]*?){13,19}\b", "[REDACTED_CARD]", text)
+    
+    # 2. Redact Aadhaar card patterns (e.g. 12 digits, often formatted as 4-4-4)
+    text = re.sub(r"\b\d{4}[-\s]?\d{4}[-\s]?\d{4}\b", "[REDACTED_AADHAAR]", text)
+    
+    # 3. Redact PAN card patterns (e.g. 5 letters, 4 digits, 1 letter)
+    text = re.sub(r"\b[A-Za-z]{5}\d{4}[A-Za-z]\b", "[REDACTED_PAN]", text)
+    
+    # 4. Redact general long digit sequences (10 to 18 digits) that could represent bank numbers or phone numbers
+    text = re.sub(r"\b\d{10,18}\b", "[REDACTED_NUMBER]", text)
+    
+    return text

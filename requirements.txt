@@ -9,3 +9,6 @@ python-dotenv==1.0.1
 # LLM Libraries (LangChain & Anthropic Claude)
 langchain-core==0.3.10
 langchain-anthropic==0.2.3
+
+# Redis Cache/DB for sessions
+redis==5.0.1

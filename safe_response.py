@@ -29,11 +29,24 @@ CRISIS_HELPLINE_MESSAGE = """
 """
 
 
-def generate_crisis_escalation(user_message: str) -> str:
+def generate_crisis_escalation(user_message: str, language: str = 'en') -> str:
     """
     Generate a calm, supportive response for crisis situations.
     ALWAYS shows helpline numbers directly.
     """
+    if language == 'mr':
+        lang_instruction = "Respond in Marathi (Devanagari script) in a warm, simple tone."
+        fallback_closing = "\n\n💙 मला तुमची काळजी आहे."
+    elif language == 'hi':
+        lang_instruction = "Respond in Hindi (Devanagari script) in a warm, simple tone."
+        fallback_closing = "\n\n💙 मुझे आपकी चिंता है।"
+    elif language == 'hinglish':
+        lang_instruction = "Respond in Romanized Hinglish (Latin characters) using warm, casual language."
+        fallback_closing = "\n\n💙 Main aapki care karta hoon."
+    else:
+        lang_instruction = "Respond in English."
+        fallback_closing = "\n\n💙 I care about you."
+
     prompt = f"""
 The user has shared something that indicates they may be in crisis or having harmful thoughts.
 
@@ -44,11 +57,11 @@ RESPOND LIKE A CALM, CARING FRIEND:
 3. Let them know they are not alone and you are here with them
 4. Gently encourage them to reach out to professional support
 5. Be calm, grounded, and supportive - not panicked
+6. {lang_instruction}
 
 CRITICAL RULES:
 - NEVER say "everything will be okay" - it dismisses their pain
 - NEVER minimize what they're feeling
-- ALWAYS include helpline information
 - Sound genuine and human, not robotic
 
 User message:
@@ -64,8 +77,8 @@ User message:
         final_response = response.content.strip()
         
         # Add appropriate warm closing if not already present
-        if not final_response.endswith(("💙", "❤️", "💛")):
-            final_response += "\n\n💙 I care about you."
+        if not final_response.endswith(("💙", "❤️", "💛", "।")):
+            final_response += fallback_closing
         
         # ALWAYS add helpline numbers
         final_response += CRISIS_HELPLINE_MESSAGE

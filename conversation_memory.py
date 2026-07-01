@@ -15,6 +15,7 @@ from config import MAX_HISTORY_LENGTH, MAX_CONTEXT_MESSAGES, MEMORY_FILE_PATH, U
 redis_client = None
 if USE_REDIS:
     try:
+        # pyrefly: ignore [missing-import]
         import redis
         redis_client = redis.Redis(
             host=REDIS_HOST,

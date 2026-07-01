@@ -20,12 +20,11 @@ CRISIS_HELPLINE_MESSAGE = """
 🇮🇳 **Other Helplines:**
 📱 **iCall:** 9152987821 (Mon-Sat 10am-8pm)
 📱 **Vandrevala Foundation:** 1860-2662-345 (24/7)
-📱 **Snehi:** 91-22-2772-6771
 📱 **Jeevan Aastha:** 1800-233-3330
 ----------------------------
 
-💙 **You are not alone. Please reach out for help.**
-💙 **तुम्ही एकटे नाही. कृपया मदतीसाठी संपर्क करा.**
+❤️ **You are not alone. Please reach out for help.**
+❤️ **तुम्ही एकटे नाही. कृपया मदतीसाठी संपर्क करा.**
 """
 
 
@@ -36,16 +35,16 @@ def generate_crisis_escalation(user_message: str, language: str = 'en') -> str:
     """
     if language == 'mr':
         lang_instruction = "Respond in Marathi (Devanagari script) in a warm, simple tone."
-        fallback_closing = "\n\n💙 मला तुमची काळजी आहे."
+        fallback_closing = "\n\n❤️ मला तुमची काळजी आहे."
     elif language == 'hi':
         lang_instruction = "Respond in Hindi (Devanagari script) in a warm, simple tone."
-        fallback_closing = "\n\n💙 मुझे आपकी चिंता है।"
+        fallback_closing = "\n\n❤️ मुझे आपकी चिंता है।"
     elif language == 'hinglish':
         lang_instruction = "Respond in Romanized Hinglish (Latin characters) using warm, casual language."
-        fallback_closing = "\n\n💙 Main aapki care karta hoon."
+        fallback_closing = "\n\n❤️ Main aapki care karta hoon."
     else:
         lang_instruction = "Respond in English."
-        fallback_closing = "\n\n💙 I care about you."
+        fallback_closing = "\n\n❤️ I care about you."
 
     prompt = f"""
 The user has shared something that indicates they may be in crisis or having harmful thoughts.
@@ -77,7 +76,7 @@ User message:
         final_response = response.content.strip()
         
         # Add appropriate warm closing if not already present
-        if not final_response.endswith(("💙", "❤️", "💛", "।")):
+        if not final_response.endswith(("❤️","💛", "।")):
             final_response += fallback_closing
         
         # ALWAYS add helpline numbers
@@ -90,7 +89,7 @@ User message:
         # Fallback - always show helpline
         return f"""I hear you. What you're sharing is serious, and I'm really glad you reached out.
 
-Please know that you are not alone. 💙
+Please know that you are not alone. ❤️
 
 {CRISIS_HELPLINE_MESSAGE}"""
 

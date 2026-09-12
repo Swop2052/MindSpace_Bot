@@ -7,8 +7,8 @@ load_dotenv()
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
 # Model configurations
-# Load model from environment, fallback to valid Claude 3.5 Sonnet model
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-3-5-sonnet-latest")
+# Load model from environment, fallback to valid Claude 4.6 Sonnet model
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 
 # Application settings
 MAX_HISTORY_LENGTH = 50

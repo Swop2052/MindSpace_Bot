@@ -1,12 +1,12 @@
 """
-FastAPI application for MindSpace Chatbot.
+FastAPI application for Manovedh Chatbot.
 Provides REST API endpoints for chatbot integration.
 """
 
 from fastapi import FastAPI, HTTPException, Depends, status, Request
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, List
@@ -15,21 +15,31 @@ import uuid
 import logging
 import os
 import time
+import secrets
 from collections import defaultdict
 
-from main import MindSpaceChatbot
-from conversation_memory import get_memory, clear_memory
+from main import ManovedhChatbot, MindSpaceChatbot
+from conversation_memory import (
+    get_memory,
+    clear_memory,
+    delete_memory,
+    session_exists,
+    list_all_session_ids,
+    redis_client,
+    USE_REDIS,
+)
 from language_support import detect_language
+from config import CONVERSATIONAL_BOT_API_KEY
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # ============================================================================
-# Rate Limiting
+# Rate Limiting (Redis-backed with in-memory fallback)
 # ============================================================================
 class RateLimiter:
-    """Simple in-memory rate limiter."""
+    """Distributed Redis-backed rate limiter with in-memory fallback."""
     
     def __init__(self, requests_per_minute: int = 60):
         self.requests_per_minute = requests_per_minute
@@ -37,6 +47,16 @@ class RateLimiter:
     
     def check(self, client_id: str) -> bool:
         """Check if request is allowed."""
+        if USE_REDIS and redis_client:
+            try:
+                key = f"manovedh:ratelimit:{client_id}"
+                current = redis_client.incr(key)
+                if current == 1:
+                    redis_client.expire(key, 60)
+                return current <= self.requests_per_minute
+            except Exception as e:
+                logger.debug(f"Redis rate limit check failed, falling back to local: {e}")
+
         now = time.time()
         # Clean old requests
         self.requests[client_id] = [t for t in self.requests[client_id] if now - t < 60]
@@ -49,17 +69,36 @@ class RateLimiter:
 
 rate_limiter = RateLimiter(requests_per_minute=60)
 
-# API Key Verification
-security = HTTPBearer()
-API_KEY = os.getenv("CONVERSATIONAL_BOT_API_KEY")
+# API Key Verification (Supports Authorization: Bearer <key> and X-API-Key: <key>)
+security = HTTPBearer(auto_error=False)
+API_KEY = CONVERSATIONAL_BOT_API_KEY or os.getenv("CONVERSATIONAL_BOT_API_KEY", "").strip()
 
-async def verify_api_key(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    if API_KEY and credentials.credentials != API_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing API key."
-        )
-    return credentials.credentials
+async def verify_api_key(
+    req: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
+):
+    token = None
+    if credentials and credentials.credentials:
+        token = credentials.credentials.strip()
+    elif "x-api-key" in req.headers:
+        token = req.headers.get("x-api-key", "").strip()
+    
+    # If API_KEY is configured on the server, validate
+    if API_KEY and len(API_KEY) >= 8:
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Missing API key. Provide header 'Authorization: Bearer <your_key>' or 'X-API-Key: <your_key>'."
+            )
+        if not secrets.compare_digest(token, API_KEY):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or incorrect API key."
+            )
+        return token
+    
+    # If no API key configured on server, permit access
+    return token or "development"
 
 # ============================================================================
 # Pydantic Models for API
@@ -146,7 +185,7 @@ class HealthCheckResponse(BaseModel):
 # Session Store
 # ============================================================================
 
-_session_store: Dict[str, MindSpaceChatbot] = {}
+_session_store: Dict[str, ManovedhChatbot] = {}
 _user_session_map: Dict[str, str] = {}
 _session_timestamps: Dict[str, datetime] = {}
 SESSION_TIMEOUT_HOURS = 24
@@ -157,12 +196,12 @@ SESSION_TIMEOUT_HOURS = 24
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("🚀 MindSpace Chatbot API starting...")
+    logger.info("🚀 Manovedh Chatbot API starting...")
     logger.info("📚 Documentation available at /docs")
     logger.info("🔍 Health check available at /health")
     logger.info(f"📊 Max sessions: {len(_session_store)}")
     yield
-    logger.info("👋 MindSpace Chatbot API shutting down...")
+    logger.info("👋 Manovedh Chatbot API shutting down...")
     for session_id, chatbot in _session_store.items():
         try:
             if hasattr(chatbot, 'memory') and chatbot.memory:
@@ -172,7 +211,7 @@ async def lifespan(app: FastAPI):
             logger.error(f"❌ Error saving session {session_id}: {e}")
 
 app = FastAPI(
-    title="MindSpace Chatbot API",
+    title="Manovedh Chatbot API",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -209,7 +248,7 @@ def cleanup_expired_sessions():
         logger.info(f"Cleaned up {len(expired)} expired sessions")
 
 
-def get_or_create_chatbot(session_id: Optional[str] = None, user_id: Optional[str] = None, client_ip: Optional[str] = None) -> MindSpaceChatbot:
+def get_or_create_chatbot(session_id: Optional[str] = None, user_id: Optional[str] = None, client_ip: Optional[str] = None) -> ManovedhChatbot:
     """Get or create a chatbot instance for a session."""
     # Cleanup expired sessions periodically
     cleanup_expired_sessions()
@@ -227,7 +266,7 @@ def get_or_create_chatbot(session_id: Optional[str] = None, user_id: Optional[st
     if not session_id:
         session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
     
-    chatbot = MindSpaceChatbot(session_id)
+    chatbot = ManovedhChatbot(session_id)
     _session_store[session_id] = chatbot
     _session_timestamps[session_id] = datetime.now()
     
@@ -243,12 +282,152 @@ def get_or_create_chatbot(session_id: Optional[str] = None, user_id: Optional[st
 @app.get("/", response_model=Dict[str, str])
 async def root():
     return {
-        "name": "MindSpace Chatbot API",
+        "name": "Manovedh Chatbot API",
         "version": "1.0.0",
         "status": "running",
         "documentation": "/docs",
-        "health": "/health"
+        "health": "/health",
+        "chat_ui": "/chat",
+        "chat_api": "/api/chat"
     }
+
+
+@app.get("/chat", response_class=HTMLResponse)
+async def chat_ui():
+    """Interactive, clean browser test UI for Manovedh Chatbot."""
+    html_content = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manovedh Chatbot — Web Client</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --text: #f8fafc;
+            --muted: #94a3b8;
+            --user-bg: #3b82f6;
+            --bot-bg: #334155;
+            --accent: #10b981;
+            --border: #475569;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+        body { background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; }
+        header { background: var(--card); padding: 14px 24px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        h1 { font-size: 1.15rem; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        .links a { color: var(--muted); text-decoration: none; font-size: 0.85rem; margin-left: 12px; }
+        .links a:hover { color: var(--text); }
+        #chat-container { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 14px; max-width: 860px; width: 100%; margin: 0 auto; }
+        .msg { max-width: 80%; padding: 12px 16px; border-radius: 12px; line-height: 1.5; font-size: 0.95rem; white-space: pre-wrap; word-break: break-word; }
+        .msg.user { align-self: flex-end; background: var(--user-bg); color: #fff; border-bottom-right-radius: 2px; }
+        .msg.bot { align-self: flex-start; background: var(--bot-bg); color: var(--text); border-bottom-left-radius: 2px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        .msg .sender { font-size: 0.75rem; color: var(--muted); margin-bottom: 4px; font-weight: 600; }
+        #input-area { background: var(--card); border-top: 1px solid var(--border); padding: 16px 20px; }
+        .input-box { max-width: 860px; margin: 0 auto; display: flex; gap: 10px; }
+        input[type="text"] { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; color: var(--text); font-size: 0.95rem; outline: none; }
+        input[type="text"]:focus { border-color: var(--user-bg); }
+        button { background: var(--user-bg); border: none; color: white; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-weight: 500; font-size: 0.95rem; }
+        button:hover { opacity: 0.9; }
+        .meta-bar { max-width: 860px; margin: 0 auto 8px auto; display: flex; gap: 12px; font-size: 0.8rem; color: var(--muted); }
+        .meta-bar input { background: transparent; border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; color: var(--text); font-size: 0.8rem; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>🌟 Manovedh Mental Wellness Companion</h1>
+        <div class="links">
+            <a href="/docs" target="_blank">API Docs</a>
+            <a href="/health" target="_blank">Health</a>
+        </div>
+    </header>
+    <div id="chat-container">
+        <div class="msg bot">
+            <div class="sender">Manovedh</div>
+            <div>Hey there! I'm here for you. Whether you want to talk about your day, how you're feeling, or anything on your mind, feel free to share without hesitation. 😊</div>
+        </div>
+    </div>
+    <div id="input-area">
+        <div class="meta-bar">
+            <span>Auth Key:</span>
+            <input type="password" id="api-key" value="jsgnkmunvryriuhpm765074nb" placeholder="API Key" style="width: 220px;" />
+            <span id="status-pill" style="margin-left: auto;"></span>
+        </div>
+        <form class="input-box" id="chat-form" onsubmit="sendMessage(event)">
+            <input type="text" id="user-input" placeholder="Type a message in English, Hindi, Marathi, or Hinglish..." autocomplete="off" />
+            <button type="submit" id="send-btn">Send</button>
+        </form>
+    </div>
+    <script>
+        let sessionId = "session_web_" + Date.now();
+        const container = document.getElementById("chat-container");
+        const input = document.getElementById("user-input");
+        const apiKeyInput = document.getElementById("api-key");
+        const sendBtn = document.getElementById("send-btn");
+
+        async function sendMessage(e) {
+            e.preventDefault();
+            const text = input.value.trim();
+            if (!text) return;
+
+            appendMsg("You", text, "user");
+            input.value = "";
+            sendBtn.disabled = true;
+
+            const loadingId = appendMsg("Manovedh", "Thinking...", "bot");
+
+            try {
+                const headers = { "Content-Type": "application/json" };
+                const key = apiKeyInput.value.trim();
+                if (key) {
+                    headers["Authorization"] = "Bearer " + key;
+                }
+
+                const res = await fetch("/api/chat", {
+                    method: "POST",
+                    headers: headers,
+                    body: JSON.stringify({
+                        message: text,
+                        session_id: sessionId
+                    })
+                });
+
+                const data = await res.json();
+                const loadingElem = document.getElementById(loadingId);
+
+                if (!res.ok) {
+                    loadingElem.innerHTML = `<div class="sender">Error (${res.status})</div><div>${data.detail || data.error || 'Request failed'}</div>`;
+                } else {
+                    sessionId = data.session_id;
+                    loadingElem.innerHTML = `<div class="sender">Manovedh</div><div>${escapeHtml(data.response)}</div>`;
+                }
+            } catch (err) {
+                const loadingElem = document.getElementById(loadingId);
+                loadingElem.innerHTML = `<div class="sender">Error</div><div>Could not connect to server: ${err.message}</div>`;
+            } finally {
+                sendBtn.disabled = false;
+                container.scrollTop = container.scrollHeight;
+            }
+        }
+
+        function appendMsg(sender, text, type) {
+            const id = "msg_" + Math.random().toString(36).substr(2, 9);
+            const div = document.createElement("div");
+            div.className = "msg " + type;
+            div.id = id;
+            div.innerHTML = `<div class="sender">${sender}</div><div>${escapeHtml(text)}</div>`;
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+            return id;
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+    </script>
+</body>
+</html>"""
+    return HTMLResponse(content=html_content)
 
 
 @app.get("/health", response_model=HealthCheckResponse)
@@ -271,7 +450,7 @@ def create_session(request: SessionCreateRequest):
     try:
         session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
         
-        chatbot = MindSpaceChatbot(session_id)
+        chatbot = ManovedhChatbot(session_id)
         _session_store[session_id] = chatbot
         _session_timestamps[session_id] = datetime.now()
         
@@ -360,13 +539,13 @@ def chat(request: ChatRequest, req: Request):
 @app.get("/api/session/{session_id}/stats", response_model=SessionStats, dependencies=[Depends(verify_api_key)])
 def get_session_stats(session_id: str):
     try:
-        if session_id not in _session_store:
+        if not session_exists(session_id):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Session {session_id} not found"
             )
         
-        chatbot = _session_store[session_id]
+        chatbot = get_or_create_chatbot(session_id)
         stats = chatbot.get_stats()
         user_info = chatbot.memory.get_user_info()
         
@@ -397,13 +576,13 @@ def get_session_stats(session_id: str):
 @app.delete("/api/session/{session_id}/clear", dependencies=[Depends(verify_api_key)])
 def clear_session_memory(session_id: str):
     try:
-        if session_id not in _session_store:
+        if not session_exists(session_id):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Session {session_id} not found"
             )
         
-        chatbot = _session_store[session_id]
+        chatbot = get_or_create_chatbot(session_id)
         chatbot.clear_memory()
         
         return {
@@ -426,13 +605,13 @@ def clear_session_memory(session_id: str):
 @app.delete("/api/session/{session_id}/reset", dependencies=[Depends(verify_api_key)])
 def reset_session(session_id: str):
     try:
-        if session_id not in _session_store:
+        if not session_exists(session_id):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Session {session_id} not found"
             )
         
-        chatbot = _session_store[session_id]
+        chatbot = get_or_create_chatbot(session_id)
         chatbot.reset_all()
         
         return {
@@ -455,13 +634,15 @@ def reset_session(session_id: str):
 @app.delete("/api/session/{session_id}", dependencies=[Depends(verify_api_key)])
 def delete_session(session_id: str):
     try:
-        if session_id not in _session_store:
+        if not session_exists(session_id):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Session {session_id} not found"
             )
         
-        del _session_store[session_id]
+        delete_memory(session_id)
+        if session_id in _session_store:
+            del _session_store[session_id]
         if session_id in _session_timestamps:
             del _session_timestamps[session_id]
         
@@ -489,18 +670,23 @@ def delete_session(session_id: str):
 @app.get("/api/sessions", dependencies=[Depends(verify_api_key)])
 def list_sessions():
     try:
+        session_ids = list_all_session_ids()
         sessions = []
-        for session_id, chatbot in _session_store.items():
-            stats = chatbot.get_stats()
-            user_name = stats.get("user_name")
-            user_info = chatbot.memory.get_user_info()
-            sessions.append({
-                "session_id": session_id,
-                "user_name": user_name,
-                "total_messages": stats.get("total_messages", 0),
-                "created_at": user_info.get("first_seen"),
-                "last_active": user_info.get("last_seen")
-            })
+        for session_id in session_ids:
+            try:
+                chatbot = get_or_create_chatbot(session_id)
+                stats = chatbot.get_stats()
+                user_name = stats.get("user_name")
+                user_info = chatbot.memory.get_user_info()
+                sessions.append({
+                    "session_id": session_id,
+                    "user_name": user_name,
+                    "total_messages": stats.get("total_messages", 0),
+                    "created_at": user_info.get("first_seen"),
+                    "last_active": user_info.get("last_seen")
+                })
+            except Exception:
+                continue
         
         return {
             "total_sessions": len(sessions),
@@ -558,16 +744,23 @@ if __name__ == "__main__":
     from config import API_HOST, API_PORT, API_RELOAD, API_WORKERS
     
     print("=" * 60)
-    print("🌟 MindSpace Chatbot API Server")
+    print("🌟 Manovedh Chatbot API Server")
     print("=" * 60)
     print("🚀 Starting server...")
-    print(f"📚 API Documentation: http://localhost:{API_PORT}/docs")
-    print(f"🔍 Health Check: http://localhost:{API_PORT}/health")
-    print(f"📨 Chat Endpoint: POST http://localhost:{API_PORT}/api/chat")
+    print(f"💬 Web Client:      http://localhost:{API_PORT}/chat")
+    print(f"📚 API Docs:        http://localhost:{API_PORT}/docs")
+    print(f"🔍 Health Check:    http://localhost:{API_PORT}/health")
+    print(f"📨 REST Endpoint:   POST http://localhost:{API_PORT}/api/chat")
     print("=" * 60)
     
-    # Uvicorn only supports workers > 1 if reload is False
-    workers = 1 if API_RELOAD else API_WORKERS
+    # On Windows, Uvicorn multi-worker mode causes spawn deadlocks, socket errors, and WinError 10054
+    # Multi-worker mode is designed for Linux / container environments
+    if os.name == 'nt' or API_RELOAD:
+        workers = 1
+        if API_WORKERS > 1 and not API_RELOAD:
+            print(f"ℹ️ Windows environment: running single worker (multi-worker is enabled on Linux/Docker)")
+    else:
+        workers = API_WORKERS
     
     uvicorn.run(
         "api:app",

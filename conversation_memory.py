@@ -155,9 +155,13 @@ class ConversationMemory:
     
     def _get_memory_path(self) -> str:
         """Get the memory file path for this session."""
-        # Create directory if it doesn't exist
-        os.makedirs(os.path.dirname(MEMORY_FILE_PATH) or ".", exist_ok=True)
-        return f"{MEMORY_FILE_PATH}.{self.session_id}.json"
+        dirname = os.path.dirname(MEMORY_FILE_PATH)
+        if dirname:
+            os.makedirs(dirname, exist_ok=True)
+        if MEMORY_FILE_PATH.endswith(".json"):
+            base = MEMORY_FILE_PATH[:-5]
+            return f"{base}_{self.session_id}.json"
+        return f"{MEMORY_FILE_PATH}_{self.session_id}.json"
     
     def _save_memory(self) -> None:
         """Save memory to Redis or fallback local file."""
@@ -173,7 +177,7 @@ class ConversationMemory:
             if USE_REDIS and redis_client:
                 # Save key with 24 hours expiry (86400 seconds)
                 redis_client.setex(
-                    f"mindspace:session:{self.session_id}",
+                    f"manovedh:session:{self.session_id}",
                     24 * 3600,
                     json.dumps(data, ensure_ascii=False)
                 )
@@ -188,13 +192,15 @@ class ConversationMemory:
         try:
             loaded_data = None
             if USE_REDIS and redis_client:
-                data_str = redis_client.get(f"mindspace:session:{self.session_id}")
+                data_str = redis_client.get(f"manovedh:session:{self.session_id}") or redis_client.get(f"mindspace:session:{self.session_id}")
                 if data_str:
                     loaded_data = json.loads(data_str)
             else:
                 path = self._get_memory_path()
-                if os.path.exists(path):
-                    with open(path, 'r', encoding='utf-8') as f:
+                legacy_path = f"{MEMORY_FILE_PATH}.{self.session_id}.json"
+                target_path = path if os.path.exists(path) else (legacy_path if os.path.exists(legacy_path) else None)
+                if target_path and os.path.exists(target_path):
+                    with open(target_path, 'r', encoding='utf-8') as f:
                         loaded_data = json.load(f)
             
             if loaded_data:
@@ -244,21 +250,66 @@ def clear_memory(session_id: str) -> None:
 
 def delete_memory(session_id: str) -> None:
     """Delete memory for a specific session."""
+    target_path = None
     if session_id in _memory_store:
+        target_path = _memory_store[session_id]._get_memory_path()
         _memory_store[session_id].reset_all()
         del _memory_store[session_id]
         
     # Delete from Redis if enabled
     if USE_REDIS and redis_client:
         try:
+            redis_client.delete(f"manovedh:session:{session_id}")
             redis_client.delete(f"mindspace:session:{session_id}")
         except Exception as e:
             print(f"Error deleting memory from Redis: {e}")
             
     # Also delete the file
     try:
-        path = f"{MEMORY_FILE_PATH}.{session_id}.json"
-        if os.path.exists(path):
-            os.remove(path)
+        if target_path and os.path.exists(target_path):
+            os.remove(target_path)
+        legacy_path = f"{MEMORY_FILE_PATH}.{session_id}.json"
+        if os.path.exists(legacy_path):
+            os.remove(legacy_path)
     except Exception as e:
         print(f"Error deleting memory file: {e}")
+
+
+def session_exists(session_id: str) -> bool:
+    """Check if a session exists in memory, Redis, or disk."""
+    if session_id in _memory_store:
+        return True
+    if USE_REDIS and redis_client:
+        try:
+            return bool(redis_client.exists(f"manovedh:session:{session_id}") or redis_client.exists(f"mindspace:session:{session_id}"))
+        except Exception:
+            pass
+    
+    # Check local disk
+    memory_inst = ConversationMemory(session_id)
+    path = memory_inst._get_memory_path()
+    legacy_path = f"{MEMORY_FILE_PATH}.{session_id}.json"
+    return os.path.exists(path) or os.path.exists(legacy_path)
+
+
+def list_all_session_ids() -> List[str]:
+    """List all persisted session IDs across Redis or local disk."""
+    found_sessions = set(_memory_store.keys())
+    if USE_REDIS and redis_client:
+        try:
+            keys = redis_client.keys("manovedh:session:*") + redis_client.keys("mindspace:session:*")
+            for k in keys:
+                found_sessions.add(k.split(":")[-1])
+        except Exception as e:
+            print(f"Error scanning Redis keys: {e}")
+    else:
+        dirname = os.path.dirname(MEMORY_FILE_PATH) or "."
+        base = os.path.basename(MEMORY_FILE_PATH)
+        prefix = (base[:-5] if base.endswith(".json") else base) + "_"
+        if os.path.exists(dirname):
+            for fname in os.listdir(dirname):
+                if fname.startswith(prefix) and fname.endswith(".json"):
+                    sess_id = fname[len(prefix):-5]
+                    if sess_id:
+                        found_sessions.add(sess_id)
+    return sorted(list(found_sessions))

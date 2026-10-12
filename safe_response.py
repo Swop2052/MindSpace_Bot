@@ -84,14 +84,18 @@ User message:
         
         return final_response
         
-    except Exception as e:
-        print(f"Error generating crisis response: {e}")
-        # Fallback - always show helpline
-        return f"""I hear you. What you're sharing is serious, and I'm really glad you reached out.
-
-Please know that you are not alone. ❤️
-
-{CRISIS_HELPLINE_MESSAGE}"""
+    except Exception:
+        # Localized fallback - always show helpline
+        if language == 'mr':
+            msg = "मी तुमचं ऐकत आहे. तुम्ही जे सांगत आहात ते गंभीर आहे, आणि तुम्ही व्यक्त झालात याचा मला आनंद आहे.\n\nकृपया लक्षात ठेवा की तुम्ही एकटे नाही. ❤️"
+        elif language == 'hi':
+            msg = "मैं आपकी बात सुन रहा हूँ। आप जो साझा कर रहे हैं वह गंभीर है, और मुझे खुशी है कि आपने बात की।\n\nकृपया जानिए कि आप अकेले नहीं हैं। ❤️"
+        elif language == 'hinglish':
+            msg = "Main aapki baat sun raha hoon. Jo aap share kar rahe hain wo serious hai, aur achha laga ki aapne baat share ki.\n\nSach mein aap akele nahi hain. ❤️"
+        else:
+            msg = "I hear you. What you're sharing is serious, and I'm really glad you reached out.\n\nPlease know that you are not alone. ❤️"
+        
+        return f"{msg}\n\n{CRISIS_HELPLINE_MESSAGE}"
 
 
 def get_support_message() -> str:

@@ -11,22 +11,21 @@ from typing import Optional, Tuple, List
 # OFFENSIVE CONTENT PATTERNS - Block inappropriate/abusive content
 # ============================================================================
 OFFENSIVE_PATTERNS = [
-    # Extreme profanity
+    # Abusive attacks & slurs directed at others or the bot
     r"\bf[uúùûü]c[k]?\s*(?:you|y[oôòó]u|u|y'all|everyone|all|me|us|them|him|her|it)\b",
-    r"\bb[iíìî]tch\b",
+    r"\b(?:you\s+are\s+a\s+|you'?re\s+a\s+)?b[iíìî]tch\b",
     r"\bb[aáâã]st[aáâã]rd\b",
-    r"\bsh[iíìî]t\b",
-    r"\bd[aáâã]mn?\b",
     r"\bf[aáâã]g\b",
     r"\bn[iíìî]gg[eéêë]r\b",
     r"\bc[uúùû]nt\b",
     r"\bc[oóòô]ck\b",
     r"\bd[iíìî]ck\b",
-    r"\bp[iíìî]ss\b",
     r"\bwh[oóòô]r[eéêë]\b",
+    r"\bpiece\s+of\s+sh[iíìî]t\b",
+    r"\beat\s+sh[iíìî]t\b",
     
     # Hindi abusive
-    r"\bb[eéêë]hen\s+ch[oóòô]d\b",
+    r"\bb[eéêë]hen\s*ch[oóòô]d\b",
     r"\bb[eéêë]hn\s+k[ai]?\s+b[oóòô]s?d[ií]?\b",
     r"\bm[aáâã]d[aáâã]rch[oóòô]d\b",
     r"\bch[oóòô]t[ií]y[aá]?\b",
@@ -63,14 +62,19 @@ CRISIS_PATTERNS = [
     r"\bself[ -]?harm\b",
     r"\bdie\s+(?:today|now|tonight|soon)\b",
     r"\bdeath\s+(?:wish|desire|want)\b",
-    r"\bhurt\s+(?:myself|yourself|someone|anyone)\b",
-    r"\bharm\s+(?:myself|yourself|someone|anyone)\b",
+    r"\b(?:want\s+to|gonna|going\s+to|will|plan\s+to)\s+hurt\s+(?:someone|anyone)\b",
+    r"\bhurt\s+(?:myself|my\s+own\s+body)\b",
+    r"\bharm\s+(?:myself|yourself)\b",
     r"\bend\s+(?:my|your|his|her|their)\s+life\b",
     r"\bcommit\s+suicide\b",
     r"\bcut\s+(?:myself|yourself|my|your)\s+(?:wrists|arms|veins|skin)\b",
     r"\btake\s+(?:my|your)\s+life\b",
     r"\bviolent\s+(?:thoughts|plans|actions)\b",
     r"\battack\s+(?:myself|yourself|others?|someone)\b",
+    r"\b(?:do\s+not|do\s*n'?t|dont)\s+want\s+to\s+(?:live|exist|be\s+here|wake\s+up)\b",
+    r"\b(?:better\s+off\s+dead|no\s+reason\s+to\s+live|nothing\s+to\s+live\s+for)\b",
+    r"\b(?:end\s+it\s+all|want\s+it\s+all\s+to\s+end)\b",
+    r"\b(?:feel\s+like|thinking\s+of)\s+dying\b",
     
     # Hindi/Urdu
     r"\bkhudkushi\b",
@@ -80,12 +84,22 @@ CRISIS_PATTERNS = [
     r"\bkhatam\s+kar\s+(?:do|dunga|denge)\b",
     r"\bjaan\s+le\s+(?:lo|lunga|lenge)\b",
     r"\bkhoon\s+kar\s+(?:do|dunga|denge)\b",
+    r"\bjeene\s+ka\s+man\s+nahi\b",
+    r"(?:खुदकुशी|आत्महत्या)",
+    r"(?:मरना|मरने)\s+(?:चाहता|चाहती|का\s+मन)",
+    r"(?:जीने\s+का\s+मन\s+नहीं|जीने\s+की\s+इच्छा\s+नहीं)",
+    r"अपनी\s+जान\s+ले",
     
     # Marathi
     r"\batma[ -]?hatya\b",
     r"\bswatahala\s+maarun\s+(?:tak|taak|ghya)\b",
     r"\bjaan\s+ghay\s+(?:ghya|te)\b",
     r"\bmarnyar\s+(?:ahe|ichchha)\b",
+    r"\bjagaychi\s+iccha\s+nahi\b",
+    r"(?:आत्महत्या)",
+    r"(?:स्वतःला\s+मारून|स्वतःला\s+संपवून)",
+    r"(?:जगायची\s+इच्छा\s+नाही|जगावेसे\s+वाटत\s+नाही)",
+    r"(?:मरायचे\s+आहे|मरावंसं\s+वाटतंय)",
 ]
 
 # ============================================================================
@@ -124,6 +138,9 @@ MENTAL_HEALTH_PATTERNS = [
     r"\b(sweat|sweating|clammy)\b",
     r"\b(heart\s+(?:racing|pounding|beating|pulse))\b",
     r"\b(breath|breathing|short\s+of\s+breath)\b",
+    r"\b(hungry|hunger|starv(?:ing|ed)?|appetite|eat|eating|food)\b",
+    r"\b(stomach|stomch|belly|tummy|headache|migraine|dizzy)\b",
+    r"\b(bhuk|bhook|bhookh|khana|pet|potaat|जेवण|भूक|भूख)\b",
     
     # Hindi
     r"\b(tension|pareshaan|pareshani|chinta)\b",
@@ -169,10 +186,11 @@ MENTAL_HEALTH_PATTERNS = [
 # OFF-TOPIC PATTERNS
 # ============================================================================
 OFF_TOPIC_PATTERNS = [
-    # Technical
+    # Technical instruction / queries (not venting about work)
     r"\bwhat\s+is\s+(?:python|java|c\+\+|javascript|programming|coding)\b",
-    r"\b(?:machine\s+learning|ml|artificial\s+intelligence|ai|deep\s+learning)\b",
-    r"\b(?:software|hardware|computer|code|algorithm)\b",
+    r"\b(?:machine\s+learning|artificial\s+intelligence|deep\s+learning)\b",
+    r"\b(?:how\s+to|write|debug|fix|explain)\s+(?:a\s+)?(?:code|software|algorithm|program|hardware)\b",
+    r"\bwhat\s+is\s+(?:a\s+)?(?:computer|code|software|hardware|algorithm|database)\b",
     
     # Sports
     r"\b(?:cricket|football|soccer|basketball)\s+(?:score|match|game|team|player)\b",
@@ -184,17 +202,19 @@ OFF_TOPIC_PATTERNS = [
     # Finance
     r"\b(?:share\s+price|stock\s+market|nifty|sensex|bitcoin|crypto)\b",
     
-    # Food
-    r"\b(?:recipe|cooking\s+tips|food|pizza|burger|biryani)\s+(?:recipe|how\s+to\s+make)\b",
+    # Food recipes (not eating disorders)
+    r"\b(?:recipe|cooking\s+tips|pizza|burger|biryani)\s+(?:recipe|how\s+to\s+make)\b",
     
     # Politics
-    r"\b(?:politics|election|pm|prime\s+minister|government|modi|rahul)\b",
+    r"\b(?:politics|election|prime\s+minister|parliament|government\s+policy)\b",
+    r"\b(?:narendra\s+modi|rahul\s+gandhi)\b",
+    r"\bpm\s+(?:modi|minister)\b",
     
-    # Education
-    r"\b(?:math|algebra|calculus|equation|physics|chemistry|biology)\s+(?:problem|question|help)\b",
+    # Education homework
+    r"\b(?:math|algebra|calculus|equation|physics|chemistry|biology)\s+(?:problem|question|homework)\b",
     
-    # Entertainment
-    r"\b(?:movie|film|actor|actress|song|music|bollywood|hollywood)\s+(?:review|suggestion|name)\b",
+    # Entertainment reviews
+    r"\b(?:movie|film|actor|actress|song|music|bollywood|hollywood)\s+(?:review|box\s+office)\b",
 ]
 
 # ============================================================================
@@ -239,27 +259,70 @@ def _normalize_text(text: str) -> str:
     return lowered
 
 
+NON_NAME_WORDS = {
+    "sad", "happy", "fine", "tired", "depressed", "lonely", "angry", "okay", "ok",
+    "good", "well", "sick", "lost", "confused", "crying", "feeling", "felling", "not", "so",
+    "very", "just", "also", "back", "here", "new", "struggling", "stressed", "stress",
+    "stressing", "anxious", "anxiety", "worried", "exhausted", "hurting", "scared",
+    "afraid", "numb", "broken", "empty", "panic", "panicking", "nervous", "mad",
+    "alive", "dead", "done", "ready", "sorry", "glad", "great", "terrible", "awful",
+    "better", "worse", "hopeless", "helpless", "bored", "human",
+    "hungry", "starving", "thirsty", "eating", "full", "sleepy", "exhausted", "busy", "free", "late",
+    "chilling", "studying", "working", "failing", "passing", "cooking", "learning", "fail", "failed", "pass", "passed", "exam", "test",
+    "me", "myself", "someone", "anyone", "nobody", "nothing", "all", "suicidal",
+    "overwhelmed", "drained", "going", "trying", "doing", "listening", "talking",
+    "really", "actually", "currently", "deeply", "honestly", "pretty", "quite",
+    "extremely", "seriously", "totally", "completely", "literally", "already",
+    "always", "still", "now", "again", "sometimes", "often", "hard", "tough",
+    "a", "an", "the", "in", "at", "on", "to", "for", "from", "with", "about", "there",
+    "bot", "friend", "user", "thinking", "wondering", "asking", "telling", "sharing",
+    "is", "are", "was", "were", "it", "they", "we", "he", "she", "you", "who", "what", "which",
+    "this", "that", "these", "those", "staying", "coming", "leaving", "sitting", "standing",
+    "याद", "आठवतंय", "आठवण", "काय", "क्या", "नाव", "नाम", "कसं", "कशी", "कसा", "पत्ता", "माहिती"
+}
+
+
 def extract_name(text: str) -> Optional[str]:
-    """Extract user's name from message."""
+    """Extract user's name from message safely avoiding emotions, questions, adverbs, and adjectives."""
     if not text:
         return None
     
+    # If the user is asking whether the bot remembers or knows their name, don't extract words from the question
+    text_lower = text.lower().strip()
+    is_name_query = any(q in text_lower for q in [
+        "remember", "what is my", "what's my", "who am i", "know my name",
+        "याद", "आठवतंय", "आठवण", "क्या है", "काय आहे"
+    ])
+    if is_name_query:
+        return None
+    
+    # Explicit name introduction patterns
     name_patterns = [
-        r"\bmy\s+name\s+is\s+([A-Za-z]+)\b",
-        r"\bi\s+am\s+([A-Za-z]+)\b",
-        r"\bcall\s+me\s+([A-Za-z]+)\b",
-        r"\bname's\s+([A-Za-z]+)\b",
-        r"\bmera\s+naam\s+([A-Za-z\u0900-\u097F]+)\s+hai\b",
-        r"\bmajha\s+naav\s+([A-Za-z\u0900-\u097F]+)\s+ahe\b",
-        r"\b(?:i'm|i am|this is)\s+([A-Za-z]+)\b",
+        r"\bmy\s+(?:name|nmae|nam)\s+is\s+([A-Za-z\u0900-\u097F]+)\b",
+        r"\bcall\s+me\s+([A-Za-z\u0900-\u097F]+)\b",
+        r"\bname'?s\s+([A-Za-z\u0900-\u097F]+)\b",
+        r"\bthis\s+is\s+([A-Za-z\u0900-\u097F]+)\b",
+        r"\bmera\s+naam\s+([A-Za-z\u0900-\u097F]+)(?:\s+hai)?\b",
+        r"\b(?:maz|maza|majh|majha|maze|majhe)\s+(?:naav|nav|नाव)\s+([A-Za-z\u0900-\u097F]+)(?:\s+(?:ahe|aahe|आहे))?\b",
+        r"(?:मेरा|मेरा)\s+नाम\s+([A-Za-z\u0900-\u097F]+)(?:\s+(?:है|ह))?",
+        r"(?:माझं|माझे)\s+नाव\s+([A-Za-z\u0900-\u097F]+)(?:\s+आहे)?",
     ]
+    
+    # Only allow "i am" / "i'm" for strictly short introductory greeting messages (e.g. "Hi, I am Swapnil")
+    # Must NOT have trailing predicates like "in exam", "feeling sad", etc.
+    words = [re.sub(r'[^\w]', '', w) for w in text_lower.split()]
+    if len(words) <= 4 and not any(w in words for w in ["in", "on", "at", "for", "with", "from", "exam", "test", "fail", "failed", "sad", "down"]):
+        name_patterns.extend([
+            r"^(?:hi|hello|hey)?[,\s]*(?:i\s+am|i'm)\s+([A-Za-z\u0900-\u097F]+)(?:\s*here)?[.!]?$",
+            r"^([A-Za-z\u0900-\u097F]+)\s+here[.!]?$",
+        ])
     
     for pattern in name_patterns:
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
             name = match.group(1).strip()
             name = re.sub(r'[^A-Za-z\u0900-\u097F\s]', '', name)
-            if name and len(name) > 0 and len(name) < 50:
+            if name and name.lower() not in NON_NAME_WORDS and 1 < len(name) < 50:
                 return name.title()
     
     return None
@@ -322,7 +385,8 @@ def has_sensitive_personal_info(text: str) -> bool:
     
     patterns = [
         r"\baadhaar\s*(?:number|card)?\b",
-        r"\bpan\s+(?:number|card)?\b",
+        r"\bpan\s+(?:number|card)\b",
+        r"\b[A-Za-z]{5}\d{4}[A-Za-z]\b",
         r"\bpassport\s+(?:number|details)?\b",
         r"\bbank\s+(?:account|details|number)\b",
         r"\bcredit\s+card\s+(?:number|details|pin)\b",
@@ -372,11 +436,17 @@ def is_domain_query(text: str) -> bool:
     if is_offensive_content(text):
         return False
     
-    if is_off_topic(text):
-        return False
+    # If user is introducing their name, always accept
+    if extract_name(text):
+        return True
     
+    # Mental health query takes precedence over accidental keyword match
     if is_mental_health_query(text):
         return True
+    
+    # Check if explicitly off-topic
+    if is_off_topic(text):
+        return False
     
     # Allow greetings
     greetings = [
@@ -393,27 +463,25 @@ def is_domain_query(text: str) -> bool:
         "sad", "happy", "angry", "scared", "nervous", "anxious", "stressed",
         "tired", "exhausted", "lonely", "worried", "confused", "lost", "hopeless",
         "shake", "sweat", "panic", "cry", "overwhelmed", "depressed",
-        "anxiety", "stress", "fear", "drained", "empty", "numb", "hurt"
+        "anxiety", "stress", "fear", "drained", "empty", "numb", "hurt", "okay", "fine"
     }
     if word_count == 1 and words[0] in emotion_words:
         return True
     
-    # Allow first person statements
-    if re.search(r"\b(?:i|me|my)\s+\w+\s+(?:feel|think|want|need|am|'m|have|had|got)\b", normalized):
+    # Allow first person statements (e.g., 'i feel', 'i really think', 'i want', 'my stomach is')
+    if re.search(r"\b(?:i|me|my)\s+(?:\w+\s+)?(?:feel|think|want|need|am|'m|have|had|got|is|was)\b", normalized):
         return True
     
     # Allow questions
     if re.search(r"\b(?:what|why|how|when|where|who)\s+\w+\s+(?:about|with|for|to|do|does|did|is|are|was|were)\b", normalized):
         return True
     
-    # Allow short messages (continuations)
-    if word_count <= 2:
+    # Allow short messages & conversational continuations (e.g., 'can we talk', 'not so bad')
+    if word_count <= 4:
         return True
     
-    if word_count > 3:
-        return True
-    
-    return False
+    # General conversational sentences (> 4 words) not matching off-topic are permitted
+    return True
 
 
 def get_off_topic_reply(text: Optional[str] = None, target_language: str = None) -> str:

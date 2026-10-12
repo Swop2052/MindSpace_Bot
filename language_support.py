@@ -18,8 +18,12 @@ SUPPORTED_LANGS = {
 HINDI_MARKERS = {"मैं", "मुझे", "क्या", "नहीं", "हूँ", "हूं", "कैसे", "कृपया", "बहुत", "दुख", "चिंता", "तनाव", "अकेला", "डर", "मेरा", "तुम", "आप", "हम"}
 MARATHI_MARKERS = {"मला", "काय", "नाही", "आहे", "कसं", "कशी", "खूप", "झाली", "करू", "पाहिजे", "तणाव", "एकटा", "भीती", "तुला", "माझं", "तुझं"}
 
-# Hinglish markers (common in Romanized Hindi/Marathi)
-HINGLISH_MARKERS = {'ky', 'kya', 'nahi', 'hai', 'hoon', 'mujhe', 'aap', 'hum', 'tum', 'mein', 'kyu', 'bohot', 'bahut', 'hota', 'hoti', 'tha', 'thi'}
+# Hinglish markers (common in Romanized Hindi)
+HINGLISH_MARKERS = {
+    'ky', 'kya', 'nahi', 'hai', 'hoon', 'mujhe', 'aap', 'hum', 'tum', 'mein', 'main',
+    'kyu', 'kyun', 'bohot', 'bahut', 'hota', 'hoti', 'tha', 'thi', 'gaya', 'gayi',
+    'raha', 'rahi', 'karo', 'karu', 'mera', 'meri', 'mere', 'bhai', 'yaar', 'kaise', 'kaisa'
+}
 
 
 def detect_language(text: str) -> str:
@@ -47,16 +51,32 @@ def detect_language(text: str) -> str:
     tokens = set(re.findall(r"[a-z]+", text_lower))
     
     # Check for Marathi-specific Romanized words
-    marathi_roman = {'mla', 'mala', 'bhuk', 'lagli', 'ahe', 'kru', 'karu', 'kay', 'zala', 'zhala', 'tula', 'majha', 'tujha'}
+    marathi_roman = {
+        'mla', 'mala', 'bhuk', 'lagli', 'ahe', 'aahe', 'ahes', 'aahes', 'kru', 'kay', 'ky',
+        'zala', 'zhala', 'tula', 'majha', 'tujha', 'maz', 'maza', 'maze', 'nav', 'naav',
+        'smjt', 'samjat', 'kasa', 'kashi', 'trr', 'tar', 'kiti', 'kuthe', 'kadhi', 'jevha',
+        'tevha', 'manat', 'vatate', 'vatatay', 'tu', 'kon', 'jhalo'
+    }
     marathi_hits = len(tokens & marathi_roman)
-    
-    if marathi_hits >= 2:
-        return 'mr'
-    
-    # Check for Hinglish/Hindi Romanized
     hinglish_hits = len(tokens & HINGLISH_MARKERS)
-    if hinglish_hits >= 2:
+
+    # Distinct Hinglish markers
+    has_distinct_hinglish = any(k in tokens for k in {'mujhe', 'mera', 'meri', 'mere', 'gaya', 'gayi', 'kya', 'main', 'mein', 'hoon', 'kyun'})
+    has_distinct_marathi = any(k in tokens for k in {'mla', 'kru', 'smjt', 'samjat', 'nav', 'naav', 'ahes', 'majha', 'tujha', 'maz', 'maza', 'ahe', 'aahe', 'zhala', 'jhalo'})
+
+    if has_distinct_marathi and not has_distinct_hinglish:
+        return 'mr'
+    if has_distinct_hinglish and not has_distinct_marathi:
         return 'hinglish'
+
+    if marathi_hits > hinglish_hits and marathi_hits >= 2:
+        return 'mr'
+    elif hinglish_hits > marathi_hits and hinglish_hits >= 2:
+        return 'hinglish'
+    elif hinglish_hits >= 2:
+        return 'hinglish'
+    elif marathi_hits >= 2:
+        return 'mr'
     
     return 'en'
 
@@ -83,8 +103,7 @@ Text: {text}"""
         translation = response.content.strip()
         return translation if translation else text
         
-    except Exception as e:
-        print(f"Translation error: {e}")
+    except Exception:
         return text
 
 
@@ -120,8 +139,7 @@ English text: {text}"""
         translation = response.content.strip()
         return translation if translation else text
         
-    except Exception as e:
-        print(f"Translation error: {e}")
+    except Exception:
         return text
 
 

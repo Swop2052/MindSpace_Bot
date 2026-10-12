@@ -1,14 +1,15 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
-# API Keys
+# Anthropic Claude Configuration
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-3-5-haiku-20241022")
+MAX_TOKENS = int(os.getenv("MAX_TOKENS", 600))
 
-# Model configurations
-# Load model from environment, fallback to valid Claude 4.6 Sonnet model
-ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
+# Security Configuration
+CONVERSATIONAL_BOT_API_KEY = os.getenv("CONVERSATIONAL_BOT_API_KEY", "").strip()
 
 # Application settings
 MAX_HISTORY_LENGTH = 50

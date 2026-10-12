@@ -1,6 +1,6 @@
-# 🌟 MindSpace Chatbot
+# 🌟 Manovedh Chatbot
 
-MindSpace is a secure, high-concurrency, and ethically aligned mental wellness companion chatbot. It is designed to engage users in warm, empathetic conversations while enforcing strict domain controls, crisis safety redirections, and session persistence.
+Manovedh is a secure, high-concurrency, and ethically aligned mental wellness companion chatbot. It is designed to engage users in warm, empathetic conversations while enforcing strict domain controls, crisis safety redirections, and session persistence.
 
 Built with **FastAPI**, **LangChain**, and **Anthropic Claude 3.5**, it is fully hardened for production deployment.
 
@@ -22,7 +22,7 @@ Built with **FastAPI**, **LangChain**, and **Anthropic Claude 3.5**, it is fully
 ## 📁 Project Structure
 
 ```text
-MindSpace_Bot/
+Manovedh_Bot/
 ├── .env                       # Local environment secrets and parameters
 ├── .gitignore                 # Files excluded from Git tracking
 ├── Dockerfile                 # Multi-stage production container instructions
